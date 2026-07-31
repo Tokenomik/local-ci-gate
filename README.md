@@ -137,3 +137,30 @@ npm test
 The decision logic is pure and tested directly, including regression tests for
 the cross-repo destruction and for `--include-running` not becoming a licence to
 cross repos.
+
+## Docker platform policy (v1.1.0)
+
+Local builds are native. Published artefacts are `linux/amd64`. Cross-architecture
+builds happen on real silicon, never under QEMU on the workstation.
+
+```bash
+# in a shell script
+. "$(node -p "require.resolve('@tokenomik/local-ci-gate/lib/docker-platform.sh')")"
+initialize_docker_platform            # sets DOCKER_DEFAULT_PLATFORM, then refuses
+                                      # a build that would need emulation
+assert_docker_amd64_parity            # before any push to ECR
+assert_built_platform "$IMAGE"        # proves what was actually built
+
+# or directly
+npx tmk-platform preflight
+npx tmk-platform preflight --publish
+npx tmk-platform assert-built myimage:sha --publish
+```
+
+The predecessor (`scripts/lib/docker-platform.sh`, copied between repos) defaulted
+every build to `linux/amd64` and installed QEMU binfmt to make that work on an ARM
+host. That default is inverted here: emulation is an explicit, discouraged opt-in
+via `TMK_ALLOW_QEMU=1`, and a refusal always names the way forward.
+
+See `builders/README.md` for how to get a native amd64 artefact, and for the live
+AWS resources that currently have no owning code.
