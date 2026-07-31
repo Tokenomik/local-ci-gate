@@ -1,0 +1,34 @@
+{
+  "name": "@tokenomik/local-ci-gate",
+  "version": "1.0.0",
+  "description": "Shared local CI isolation and container reaping for Tokenomik repos sharing one Docker daemon.",
+  "license": "UNLICENSED",
+  "private": false,
+  "main": "lib/isolation.cjs",
+  "bin": {
+    "tmk-reap-testcontainers": "bin/reap-testcontainers.cjs",
+    "tmk-reap-test-hygiene": "bin/reap-test-hygiene.cjs"
+  },
+  "files": [
+    "lib",
+    "bin",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./lib/isolation.cjs",
+    "./ownership": "./lib/ownership.cjs",
+    "./config": "./lib/config.cjs",
+    "./docker": "./lib/docker.cjs"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tokenomik/local-ci-gate.git"
+  }
+}
+
