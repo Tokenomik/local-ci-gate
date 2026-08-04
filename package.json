@@ -1,6 +1,6 @@
 {
   "name": "@tokenomik/local-ci-gate",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Shared local CI isolation and container reaping for Tokenomik repos sharing one Docker daemon.",
   "license": "UNLICENSED",
   "private": false,
@@ -27,7 +27,9 @@
     "./platform": "./lib/platform.cjs",
     "./lib/docker-platform.sh": "./lib/docker-platform.sh",
     "./bin/tmk-platform.cjs": "./bin/tmk-platform.cjs",
-    "./builders/amd64-ec2.sh": "./builders/amd64-ec2.sh"
+    "./builders/amd64-ec2.sh": "./builders/amd64-ec2.sh",
+    "./hostlock": "./lib/hostlock.cjs",
+    "./concurrency": "./lib/concurrency.cjs"
   },
   "scripts": {
     "test": "node --test test/*.test.cjs"

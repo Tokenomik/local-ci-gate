@@ -164,3 +164,37 @@ via `TMK_ALLOW_QEMU=1`, and a refusal always names the way forward.
 
 See `builders/README.md` for how to get a native amd64 artefact, and for the live
 AWS resources that currently have no owning code.
+
+## Host serialisation and worker caps (v1.2.0)
+
+Ownership labelling stopped repos destroying each other's containers. It did not
+stop them all running at once. On a 12-core host, four repos each sizing a worker
+pool to the core count asks for ~48 workers, plus containers, plus the WSL2 VM
+which by default is handed every core and half the RAM. CPU starvation then makes
+container startup waits and test timeouts fail non-deterministically, which
+surfaces as flaky red gates that look like code defects.
+
+```js
+const { withLock } = require('@tokenomik/local-ci-gate/hostlock');
+const { runnerEnv } = require('@tokenomik/local-ci-gate/concurrency');
+
+// lint / typecheck / unit: unchanged, still parallel across repos
+await runPhases(nonDockerPhases);
+
+// docker phases: one repo at a time, host-wide
+await withLock(cfg.repoId, async () => {
+  const env = { ...process.env, ...runnerEnv({ hostLocked: true }) };
+  await runPhases(dockerPhases, { env });
+});
+```
+
+Only the Docker phases are serialised, so the queue covers what actually
+contends. `runnerEnv` emits `VITEST_MAX_THREADS`, `JEST_WORKERS`,
+`PYTEST_XDIST_AUTO_NUM_WORKERS`, `UV_THREADPOOL_SIZE` and appends
+`--max-old-space-size` to any existing `NODE_OPTIONS` -- an unbounded V8 heap was
+observed reaching 8GB in one process, which pushes the box into swap and presents
+as CPU exhaustion.
+
+`DEFAULTS.wslProcessors` mirrors `processors=` in `%USERPROFILE%\.wslconfig`.
+Change one, change the other, or the host-core budget silently drifts.
+
