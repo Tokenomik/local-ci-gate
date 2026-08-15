@@ -1,0 +1,18 @@
+# @tokenomik packages resolve from GitHub Packages, everything else from npmjs.
+#
+# The token needs only `read:packages`. Put it in your USER .npmrc
+# (%USERPROFILE%\.npmrc), never in the repo:
+#
+#   //npm.pkg.github.com/:_authToken=<a PAT with read:packages>
+#
+# In CI, GITHUB_TOKEN already has read:packages for repos in the same org:
+#
+#   //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+#
+# WHY THIS EXISTS
+# The package used to be installed by private git URL. That needs a git binary
+# and git credentials, which no slim container base has, so `npm ci` inside an
+# image build died with `npm error enoent An unknown git error occurred`. A
+# registry install needs neither - just a token in .npmrc - so the tools/ci
+# split that worked around it is no longer necessary.
+@tokenomik:registry=https://npm.pkg.github.com
