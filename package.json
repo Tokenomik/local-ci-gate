@@ -2,7 +2,7 @@
   "name": "@tokenomik/local-ci-gate",
   "version": "1.2.0",
   "description": "Shared local CI isolation and container reaping for Tokenomik repos sharing one Docker daemon.",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "private": false,
   "main": "lib/isolation.cjs",
   "bin": {
@@ -42,6 +42,7 @@
     "url": "git+https://github.com/Tokenomik/local-ci-gate.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   }
 }
