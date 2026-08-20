@@ -210,13 +210,31 @@ test('volume prune refuses while another repo has live testcontainers', () => {
   assert.equal(d.prune, false);
 });
 
-test('volume prune is always scoped to this repo, never host-wide', () => {
+test('volume prune targets dangling volumes, never the shared testcontainers label', () => {
+  // This used to assert `label=com.tokenomik.repo=<id>`, which looked correctly
+  // scoped and matched NOTHING: testcontainers volumes are anonymous - the
+  // library labels the container, not the volume. Verified on a live daemon with
+  // 163 dangling volumes where both `-f label=com.tokenomik.repo` and
+  // `-f label=org.testcontainers=true` returned zero. 11 GB had accumulated
+  // because the prune had never once removed anything.
+  //
+  // The safety is not the label. It is the two guards asserted below: we only
+  // prune when nothing was spared and no live testcontainer exists on the
+  // daemon. `dangling=true` cannot touch a volume a container still references.
   const d = decideVolumePrune({ repoId: 'graphene_supply', sparedCount: 0, liveTestcontainerCount: 0 });
   assert.equal(d.prune, true);
-  assert.deepEqual(d.filters, ['label=com.tokenomik.repo=graphene_supply']);
+  assert.deepEqual(d.filters, ['dangling=true']);
   for (const f of d.filters) {
     assert.ok(!/org\.testcontainers/.test(f), 'must never prune by the shared testcontainers label');
   }
+});
+
+test('volume prune is refused while anything could still own a volume', () => {
+  // The real safety property, and the reason a dangling filter is acceptable.
+  const spared = decideVolumePrune({ repoId: 'r', sparedCount: 2, liveTestcontainerCount: 0 });
+  assert.equal(spared.prune, false);
+  const live = decideVolumePrune({ repoId: 'r', sparedCount: 0, liveTestcontainerCount: 1 });
+  assert.equal(live.prune, false);
 });
 
 test('volume prune refuses without a repo id', () => {
