@@ -72,7 +72,7 @@ test('PID reuse cannot deadlock: a lapsed heartbeat on a live-looking reused pid
     repo: 'graphene_supply',
     pid: 25760,
     token: 'x',
-    at: Date.now() - (46 * 60_000),                            // older than the 45min cap
+    at: Date.now() - (121 * 60_000),                           // older than the 2h cap
     heartbeatAt: Date.now() - (HEARTBEAT_STALE_MS + 5_000),
   };
   const { stale, reason } = isStale(held, { alive: () => true });
