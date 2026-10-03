@@ -25,7 +25,26 @@ function tmpLock(name) {
   return path.join(os.tmpdir(), `hostlock-hb-${name}-${process.pid}-${Date.now()}.lock`);
 }
 
-test('a holder that stopped heartbeating is stale, even while its PID looks alive', () => {
+test('a stalled holder whose PID is still alive is NOT stale - it keeps the lock', () => {
+  // This is the incident, corrected. A running suite stalled its heartbeat for
+  // longer than the window (observed: 544s) while its PID kept running. The old
+  // behaviour stole the lock here and two gates collided, killing the live one.
+  // A stale heartbeat on a LIVE pid must now keep waiting, not steal.
+  const held = {
+    repo: 'graphene_supply',
+    pid: 25760,
+    token: 'x',
+    at: Date.now() - 60_000,                                   // young lock (well under the 45min cap)
+    heartbeatAt: Date.now() - (HEARTBEAT_STALE_MS + 5_000),    // heartbeat lapsed
+  };
+  const { stale } = isStale(held, { alive: () => true });       // pid answers AND is genuinely ours
+  assert.equal(stale, false, 'a stalled-but-live holder keeps its lock');
+});
+
+test('a holder that stopped heartbeating AND whose pid is gone is stale', () => {
+  // The clean-kill case the heartbeat exists to catch fast: the holder was killed,
+  // its pid is gone, and we must reclaim within the heartbeat window, not wait the
+  // full 45min cap.
   const held = {
     repo: 'graphene_supply',
     pid: 25760,
@@ -33,12 +52,9 @@ test('a holder that stopped heartbeating is stale, even while its PID looks aliv
     at: Date.now() - 60_000,
     heartbeatAt: Date.now() - (HEARTBEAT_STALE_MS + 5_000),
   };
-  // The exact shape of the incident: the PID answers, because something else
-  // now owns that number.
-  const { stale, reason } = isStale(held, { alive: () => true });
-  assert.equal(stale, true, 'a lapsed heartbeat outranks a live-looking pid');
+  const { stale, reason } = isStale(held, { alive: () => false });
+  assert.equal(stale, true, 'a lapsed heartbeat on a dead pid is reclaimable');
   assert.match(reason, /stopped heartbeating/);
-  assert.match(reason, /graphene_supply/);
 });
 
 test('a fresh heartbeat keeps the lock held', () => {
@@ -46,17 +62,22 @@ test('a fresh heartbeat keeps the lock held', () => {
   assert.equal(isStale(held, { alive: () => true }).stale, false);
 });
 
-test('a lapsed heartbeat is stale even in the first minutes of a lock', () => {
-  // The old age-based rule only fired at 45 minutes, which is why the incident
-  // ran for eighteen without resolving.
+test('PID reuse cannot deadlock: a lapsed heartbeat on a live-looking reused pid still clears at the 45min cap', () => {
+  // The scenario the heartbeat-only design feared: the holder died, its pid number
+  // was recycled by something unrelated, so the pid 'answers'. We keep waiting
+  // while it looks alive - but only until the hard age cap, which condemns ANY
+  // lock older than staleMs regardless of pid or heartbeat. So a recycled pid
+  // self-heals at the cap instead of deadlocking.
   const held = {
-    repo: 'a',
-    pid: 1,
+    repo: 'graphene_supply',
+    pid: 25760,
     token: 'x',
-    at: Date.now() - 30_000,
-    heartbeatAt: Date.now() - (HEARTBEAT_STALE_MS + 1),
+    at: Date.now() - (121 * 60_000),                           // older than the 2h cap
+    heartbeatAt: Date.now() - (HEARTBEAT_STALE_MS + 5_000),
   };
-  assert.equal(isStale(held, { alive: () => true }).stale, true);
+  const { stale, reason } = isStale(held, { alive: () => true });
+  assert.equal(stale, true, 'the hard age cap clears it even though the pid looks alive');
+  assert.match(reason, /min/);
 });
 
 test('a lock with no heartbeat falls back to the pid check rather than being stale', () => {
