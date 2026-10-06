@@ -25,20 +25,26 @@ function tmpLock(name) {
   return path.join(os.tmpdir(), `hostlock-hb-${name}-${process.pid}-${Date.now()}.lock`);
 }
 
-test('a stalled holder whose PID is still alive is NOT stale - it keeps the lock', () => {
-  // This is the incident, corrected. A running suite stalled its heartbeat for
-  // longer than the window (observed: 544s) while its PID kept running. The old
-  // behaviour stole the lock here and two gates collided, killing the live one.
-  // A stale heartbeat on a LIVE pid must now keep waiting, not steal.
+test('a lapsed heartbeat on a live PID IS stale - silence is death now that the heartbeat cannot stall', () => {
+  // 1.4.1 asserted the opposite, and was right at the time: the heartbeat ran on
+  // the event loop, a spawnSync test step blocked it for 544s, and a healthy
+  // holder went silent. Making the PID a veto stopped the theft but sent a hung
+  // or recycled holder to the 2h cap - the corner case this release fixes.
+  //
+  // The heartbeat now beats from a worker thread, so a live holder cannot fall
+  // silent (test/hostlock-worker-heartbeat.test.cjs proves it through a blocked
+  // main thread). That is what lets silence mean death again, with a 2-minute
+  // window for genuine OS-level stalls of the writer itself.
   const held = {
     repo: 'graphene_supply',
     pid: 25760,
     token: 'x',
-    at: Date.now() - 60_000,                                   // young lock (well under the 45min cap)
+    at: Date.now() - 60_000,                                   // young lock, well under the cap
     heartbeatAt: Date.now() - (HEARTBEAT_STALE_MS + 5_000),    // heartbeat lapsed
   };
-  const { stale } = isStale(held, { alive: () => true });       // pid answers AND is genuinely ours
-  assert.equal(stale, false, 'a stalled-but-live holder keeps its lock');
+  const { stale, reason } = isStale(held, { alive: () => true });  // pid answers - but silence decides
+  assert.equal(stale, true, 'a silent holder is reclaimed whatever its PID says');
+  assert.match(reason, /stopped heartbeating/);
 });
 
 test('a holder that stopped heartbeating AND whose pid is gone is stale', () => {
